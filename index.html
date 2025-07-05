@@ -300,6 +300,10 @@
         // Add new reference when form is submitted
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const addButton = form.querySelector('button[type="submit"]');
+            addButton.disabled = true; // Disable button to prevent double submission
+            addButton.textContent = 'Adding...'; // Change button text
+
             const newReference = {
                 title: form.title.value.trim(),
                 author: form.author.value.trim(),
@@ -311,16 +315,24 @@
             // Basic validation to ensure pageNumber is a number
             if (isNaN(newReference.pageNumber)) {
                 await showMessage("Error: Page number must be a valid number.");
+                addButton.disabled = false; // Re-enable button
+                addButton.textContent = 'Add Reference'; // Reset button text
                 return; // Stop execution if pageNumber is not a number
             }
+
+            console.log("Attempting to add new reference:", newReference); // Log data before adding
 
             try {
                 // Add new reference to Firestore
                 await addDoc(refsCollectionRef, newReference);
                 form.reset(); // Clear the form
+                await showMessage("Reference added successfully!"); // Confirmation message
             } catch (error) {
-                console.error("Error adding reference: ", error);
-                await showMessage("An error occurred, reference could not be added.");
+                console.error("Error adding reference: ", error); // Log the full error object
+                await showMessage(`An error occurred, reference could not be added. Details: ${error.message || error}`);
+            } finally {
+                addButton.disabled = false; // Re-enable button
+                addButton.textContent = 'Add Reference'; // Reset button text
             }
         });
 
