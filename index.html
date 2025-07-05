@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,19 +22,20 @@
         .text-custom-dark { color: #2C3E50; }
         .decorative-image {
             position: absolute;
-            top: -50px;
-            right: -80px;
-            width: 400px;
+            /* Adjusted position for better visibility */
+            top: 20px; /* Moved closer to the top */
+            right: 20px; /* Moved closer to the right */
+            width: 450px; /* Slightly increased width */
             height: auto;
-            opacity: 0.9;
+            opacity: 0.7;
             z-index: 0;
             pointer-events: none;
         }
         @media (max-width: 768px) {
             .decorative-image {
                 width: 250px;
-                top: -20px;
-                right: -60px;
+                top: 20px;
+                right: 10px;
             }
         }
         .focus\:ring-custom-green:focus { --tw-ring-color: #94B43B; }
@@ -45,8 +46,8 @@
     </style>
 </head>
 <body class="relative min-h-screen overflow-x-hidden">
-    <!-- Updated image source to the GitHub link provided by the user -->
-    <img src="https://github.com/project-sync/hr-leadership/blob/main/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-07-06%20000541.png" alt="Dekoratif Şeritler" class="decorative-image">
+    <!-- Image source using the raw GitHub link, with onerror for debugging -->
+    <img src="https://raw.githubusercontent.com/project-sync/hr-leadership/main/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-07-06%20000541.png" alt="Decorative Stripes" class="decorative-image" onerror="console.error('Image failed to load:', this.src)">
 
     <div class="relative z-10 container mx-auto p-4 sm:p-6 lg:p-8">
         <header class="mb-8 md:mb-12">
@@ -54,7 +55,7 @@
             <p class="text-lg text-gray-500 mt-2">A minimalist space to store your presentation sources.</p>
         </header>
 
-        <section class="mb-8 md:mb-12 p-6 bg-custom-light rounded-2xl shadow-sm border border-gray-100">
+        <section class="mb-8 md:mb-12 p-4 bg-custom-light rounded-2xl shadow-sm border border-gray-100">
              <h2 class="text-xl font-semibold text-custom-dark">M7 Course: <span class="font-normal">Human Resources Management and Leadership</span></h2>
              <h3 class="text-xl font-semibold text-custom-dark mt-2">University: <span class="font-normal">HTW Berlin</span></h3>
         </section>
@@ -77,7 +78,7 @@
                     </div>
                     <div>
                         <label for="link" class="block text-sm font-medium text-gray-600 mb-1">Link</label>
-                        <input type="url" id="link" name="link" class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-custom-green transition-shadow duration-200" placeholder="https://ornek.com">
+                        <input type="url" id="link" name="link" class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-custom-green transition-shadow duration-200" placeholder="https://example.com">
                     </div>
                     <button type="submit" class="w-full bg-custom-green text-white font-bold py-3 px-4 rounded-lg hover:bg-custom-green-dark transition-colors duration-300 shadow-md">
                         Add Reference
@@ -92,7 +93,7 @@
                 </div>
 
                 <div id="references-list" class="space-y-4">
-                    <!-- Referanslar buraya dinamik olarak eklenecektir -->
+                    <!-- References will be added here dynamically -->
                 </div>
                  <div id="empty-state" class="hidden text-center py-16 px-6 bg-custom-light rounded-2xl shadow-sm">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -110,54 +111,54 @@
     </div>
 
     <script type="module">
-        // Firebase SDK'larını içe aktar
+        // Import Firebase SDKs
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Firebase Kurulumu ---
-        // Bu değişkenler, uygulamanın çalıştığı ortam tarafından sağlanır.
+        // --- Firebase Setup ---
+        // These variables are provided by the environment where the application runs.
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-        // Firebase uygulamasını başlat
+        // Initialize the Firebase app
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        // Firestore'da verilerin saklanacağı koleksiyonun referansı
-        // Verileri herkese açık hale getirmek için 'public' yolu kullanılıyor
+        // Reference to the collection where data will be stored in Firestore
+        // Using the 'public' path to make data publicly accessible
         const refsCollectionRef = collection(db, `artifacts/${appId}/public/data/references`);
 
-        // --- DOM Elementleri ---
+        // --- DOM Elements ---
         const form = document.getElementById('add-reference-form');
         const referencesList = document.getElementById('references-list');
         const emptyState = document.getElementById('empty-state');
 
-        // --- Fonksiyonlar ---
+        // --- Functions ---
 
         /**
-         * Referansları DOM'a işler.
-         * @param {Array} references - İşlenecek referansların dizisi.
+         * Renders references to the DOM.
+         * @param {Array} references - Array of references to be rendered.
          */
         const renderReferences = (references) => {
-            referencesList.innerHTML = ''; // Mevcut listeyi temizle
+            referencesList.innerHTML = ''; // Clear the existing list
 
             if (references.length === 0) {
                 emptyState.classList.remove('hidden');
             } else {
                 emptyState.classList.add('hidden');
                 
-                // Referansları sayfa numarasına göre sırala
+                // Sort references by page number
                 const sortedReferences = [...references].sort((a, b) => a.pageNumber - b.pageNumber);
 
                 sortedReferences.forEach(ref => {
                     const refElement = document.createElement('div');
                     refElement.className = 'bg-custom-light p-5 rounded-xl shadow-sm border border-gray-100 transform hover:scale-[1.02] transition-transform duration-300';
-                    refElement.setAttribute('data-id', ref.id); // Firestore document ID'sini ata
+                    refElement.setAttribute('data-id', ref.id); // Assign Firestore document ID
 
-                    // Tarihi okunabilir bir formata çevir
-                    const formattedDate = new Date(ref.createdAt).toLocaleDateString('tr-TR', {
+                    // Convert date to a readable format
+                    const formattedDate = new Date(ref.createdAt).toLocaleDateString('en-US', {
                         year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'
                     });
 
@@ -167,11 +168,11 @@
                                 <h3 class="text-xl font-bold text-custom-dark">${ref.title}</h3>
                                 <p class="text-md text-gray-600 mt-1">${ref.author}</p>
                                 <p class="text-sm text-gray-400 mt-2">${formattedDate}</p>
-                                ${ref.link ? `<div class="mt-4"><a href="${ref.link}" target="_blank" rel="noopener noreferrer" class="text-sm text-custom-green hover:underline">Bağlantıyı Ziyaret Et &rarr;</a></div>` : ''}
+                                ${ref.link ? `<div class="mt-4"><a href="${ref.link}" target="_blank" rel="noopener noreferrer" class="text-sm text-custom-green hover:underline">Visit Link &rarr;</a></div>` : ''}
                             </div>
                             <div class="text-right flex-shrink-0">
-                                 <span class="inline-block bg-custom-green bg-opacity-80 text-white text-sm font-semibold px-3 py-1 rounded-full mb-2">Sayfa ${ref.pageNumber}</span>
-                                 <button class="delete-btn text-gray-400 hover:text-red-500 transition-colors duration-200 mt-2 block ml-auto" title="Referansı Sil">
+                                 <span class="inline-block bg-custom-green bg-opacity-80 text-white text-sm font-semibold px-3 py-1 rounded-full mb-2">Page ${ref.pageNumber}</span>
+                                 <button class="delete-btn text-gray-400 hover:text-red-500 transition-colors duration-200 mt-2 block ml-auto" title="Delete Reference">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -184,9 +185,9 @@
             }
         };
 
-        // --- Olay Dinleyicileri ---
+        // --- Event Listeners ---
 
-        // Form gönderildiğinde yeni referans ekle
+        // Add new reference when form is submitted
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const newReference = {
@@ -194,44 +195,45 @@
                 author: form.author.value.trim(),
                 link: form.link.value.trim(),
                 pageNumber: parseInt(form.pageNumber.value, 10),
-                createdAt: new Date().toISOString() // Ekleme tarihini ISO formatında kaydet
+                createdAt: new Date().toISOString() // Save creation date in ISO format
             };
 
+            // Basic validation to ensure pageNumber is a number
+            if (isNaN(newReference.pageNumber)) {
+                console.log("Error: Page number must be a valid number.");
+                return; // Stop execution if pageNumber is not a number
+            }
+
             try {
-                // Yeni referansı Firestore'a ekle
+                // Add new reference to Firestore
                 await addDoc(refsCollectionRef, newReference);
-                form.reset(); // Formu temizle
+                form.reset(); // Clear the form
             } catch (error) {
-                console.error("Referans eklenirken hata oluştu: ", error);
-                // Replaced alert with a custom message box or similar UI element if this were a full app.
-                // For this example, I'll just log to console as per instructions to avoid alert().
-                console.log("Bir hata oluştu, referans eklenemedi.");
+                console.error("Error adding reference: ", error);
+                console.log("An error occurred, reference could not be added.");
             }
         });
 
-        // Referans listesindeki silme butonlarına tıklandığında
+        // When delete buttons in the reference list are clicked
         referencesList.addEventListener('click', async (e) => {
             if (e.target.closest('.delete-btn')) {
                 const refElement = e.target.closest('[data-id]');
                 const refId = refElement.dataset.id;
                 
-                // Replaced confirm with a custom message box or similar UI element if this were a full app.
-                // For this example, I'll just proceed with deletion for demonstration.
-                console.log("Referansı silmek istediğinizden emin misiniz?");
+                console.log("Are you sure you want to delete this reference?");
                 try {
-                    // Referansı Firestore'dan sil
+                    // Delete reference from Firestore
                     await deleteDoc(doc(db, `artifacts/${appId}/public/data/references`, refId));
                 } catch (error) {
-                    console.error("Referans silinirken hata oluştu: ", error);
-                    // Replaced alert with a custom message box or similar UI element if this were a full app.
-                    console.log("Bir hata oluştu, referans silinemedi.");
+                    console.error("Error deleting reference: ", error);
+                    console.log("An error occurred, reference could not be deleted.");
                 }
             }
         });
 
-        // --- Başlangıç ---
+        // --- Initialization ---
         
-        // Kullanıcı kimlik doğrulamasını yönet
+        // Manage user authentication
         const manageAuth = async () => {
              try {
                 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
@@ -241,20 +243,20 @@
                     await signInAnonymously(auth);
                 }
              } catch (error) {
-                 console.error("Kimlik doğrulama hatası:", error);
+                 console.error("Authentication error:", error);
              }
         };
 
-        // Sayfa yüklendiğinde kimlik doğrulama yap ve verileri dinle
+        // Authenticate on page load and listen for data changes
         document.addEventListener('DOMContentLoaded', async () => {
             await manageAuth();
             
-            // Firestore'daki değişiklikleri gerçek zamanlı olarak dinle
+            // Listen for real-time changes in Firestore
             onSnapshot(refsCollectionRef, (snapshot) => {
                 const references = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderReferences(references);
             }, (error) => {
-                console.error("Veri alınırken hata oluştu:", error);
+                console.error("Error fetching data:", error);
             });
         });
 
