@@ -174,31 +174,228 @@
     </div>
 
     <script type="module">
-        // Import Firebase SDKs
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Storage Management - Firebase with localStorage fallback
+        let useFirebase = false;
+        let app, auth, db, refsCollectionRef;
 
-        // --- Firebase Setup ---
-        // These variables are provided by the environment where the application runs.
-        // If running outside Canvas (e.g., locally), these might be undefined.
-        // We provide default empty objects/strings to prevent errors.
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // Try to initialize Firebase
+        try {
+            // Import Firebase SDKs
+            const { initializeApp } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
+            const { getAuth, signInAnonymously, signInWithCustomToken } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
+            const { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
 
-        // Warn if Firebase config is missing, likely when running outside Canvas
-        if (Object.keys(firebaseConfig).length === 0) {
-            console.warn("Firebase configuration is missing. The app might not function correctly outside the Canvas environment. Please ensure __firebase_config and __app_id are provided.");
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            if (Object.keys(firebaseConfig).length > 0) {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                refsCollectionRef = collection(db, `artifacts/${appId}/public/data/references`);
+                useFirebase = true;
+                console.log("Firebase initialized successfully");
+            } else {
+                throw new Error("Firebase configuration not available");
+            }
+        } catch (error) {
+            console.warn("Firebase initialization failed, using localStorage fallback:", error.message);
+            useFirebase = false;
         }
 
-        // Initialize the Firebase app
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        
-        // Reference to the collection where data will be stored in Firestore
-        // Using the 'public' path to make data publicly accessible
-        const refsCollectionRef = collection(db, `artifacts/${appId}/public/data/references`);
+        // --- Storage Interface ---
+        const storage = {
+            async addReference(reference) {
+                if (useFirebase) {
+                    try {
+                        const docRef = await addDoc(refsCollectionRef, reference);
+                        return docRef.id;
+                    } catch (error) {
+                        console.error("Firebase add failed, falling back to localStorage:", error);
+                        useFirebase = false;
+                        return this.addReference(reference);
+                    }
+                } else {
+                    // localStorage fallback
+                    const id = 'ref_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    const references = this.getReferences();
+                    references.push({ id, ...reference });
+                    localStorage.setItem('references', JSON.stringify(references));
+                    return id;
+                }
+            },
+
+            async deleteReference(id) {
+                if (useFirebase) {
+                    try {
+                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/references`, id));
+                        return true;
+                    } catch (error) {
+                        console.error("Firebase delete failed, falling back to localStorage:", error);
+                        useFirebase = false;
+                        return this.deleteReference(id);
+                    }
+                } else {
+                    // localStorage fallback
+                    const references = this.getReferences();
+                    const filteredReferences = references.filter(ref => ref.id !== id);
+                    localStorage.setItem('references', JSON.stringify(filteredReferences));
+                    return true;
+                }
+            },
+
+            getReferences() {
+                if (useFirebase) {
+                    // For Firebase, we'll handle this through the snapshot listener
+                    return [];
+                } else {
+                    // localStorage fallback
+                    const stored = localStorage.getItem('references');
+                    return stored ? JSON.parse(stored) : [];
+                }
+            },
+
+            onReferencesChange(callback) {
+                if (useFirebase) {
+                    try {
+                        return onSnapshot(refsCollectionRef, (snapshot) => {
+                            const references = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            callback(references);
+                        }, (error) => {
+                            console.error("Firebase listener error, falling back to localStorage:", error);
+                            useFirebase = false;
+                            callback(this.getReferences());
+                        });
+                    } catch (error) {
+                        console.error("Firebase listener setup failed:", error);
+                        useFirebase = false;
+                        callback(this.getReferences());
+                    }
+                } else {
+                    // localStorage fallback - initial load
+                    callback(this.getReferences());
+                    
+                    // Listen for storage changes in other tabs
+                    const handleStorageChange = (e) => {
+                        if (e.key === 'references') {
+                            callback(this.getReferences());
+                        }
+                    };
+                    window.addEventListener('storage', handleStorageChange);
+                    
+                    // Return cleanup function
+                    return () => window.removeEventListener('storage', handleStorageChange);
+                }
+            }
+        };
+
+        // --- Editable Text Management ---
+        const textEditor = {
+            init() {
+                this.setupEditableElements();
+                this.loadSavedText();
+            },
+
+            setupEditableElements() {
+                // Make course title editable
+                const courseTitle = document.querySelector('h1');
+                if (courseTitle) {
+                    this.makeEditable(courseTitle, 'courseTitle');
+                }
+
+                // Make course description editable
+                const courseDescription = document.querySelector('h2');
+                if (courseDescription) {
+                    this.makeEditable(courseDescription, 'courseDescription');
+                }
+
+                // Make university editable
+                const university = document.querySelector('h3');
+                if (university) {
+                    this.makeEditable(university, 'university');
+                }
+
+                // Make presentation title editable
+                const presentationTitle = document.querySelector('.lg\\:col-span-2 h2');
+                if (presentationTitle) {
+                    this.makeEditable(presentationTitle, 'presentationTitle');
+                }
+            },
+
+            makeEditable(element, key) {
+                element.style.cursor = 'pointer';
+                element.title = 'Click to edit';
+                element.addEventListener('click', () => this.editElement(element, key));
+            },
+
+            editElement(element, key) {
+                const currentText = element.textContent;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = currentText;
+                input.className = element.className + ' border-2 border-custom-green';
+                input.style.width = '100%';
+                input.style.background = 'white';
+
+                const saveEdit = () => {
+                    const newText = input.value.trim();
+                    if (newText && newText !== currentText) {
+                        element.textContent = newText;
+                        localStorage.setItem(key, newText);
+                    }
+                    element.style.display = 'block';
+                    input.remove();
+                };
+
+                const cancelEdit = () => {
+                    element.style.display = 'block';
+                    input.remove();
+                };
+
+                input.addEventListener('blur', saveEdit);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') saveEdit();
+                    if (e.key === 'Escape') cancelEdit();
+                });
+
+                element.style.display = 'none';
+                element.parentNode.insertBefore(input, element);
+                input.focus();
+            },
+
+            loadSavedText() {
+                const savedTexts = {
+                    courseTitle: localStorage.getItem('courseTitle'),
+                    courseDescription: localStorage.getItem('courseDescription'),
+                    university: localStorage.getItem('university'),
+                    presentationTitle: localStorage.getItem('presentationTitle')
+                };
+
+                Object.entries(savedTexts).forEach(([key, value]) => {
+                    if (value) {
+                        const element = this.getElementByKey(key);
+                        if (element) {
+                            element.textContent = value;
+                        }
+                    }
+                });
+            },
+
+            getElementByKey(key) {
+                switch (key) {
+                    case 'courseTitle':
+                        return document.querySelector('h1');
+                    case 'courseDescription':
+                        return document.querySelector('h2');
+                    case 'university':
+                        return document.querySelector('h3');
+                    case 'presentationTitle':
+                        return document.querySelector('.lg\\:col-span-2 h2');
+                    default:
+                        return null;
+                }
+            }
+        };
 
         // --- DOM Elements ---
         const form = document.getElementById('add-reference-form');
@@ -209,17 +406,10 @@
         const modalButtons = document.getElementById('modal-buttons');
 
         // --- Custom Modal Functions ---
-
-        /**
-         * Shows a custom message modal.
-         * @param {string} message - The message to display.
-         * @param {boolean} isConfirm - If true, shows OK and Cancel buttons. Otherwise, only OK.
-         * @returns {Promise<boolean>} - Resolves with true if confirmed, false if cancelled.
-         */
         const showMessage = (message, isConfirm = false) => {
             return new Promise((resolve) => {
                 modalMessage.textContent = message;
-                modalButtons.innerHTML = ''; // Clear previous buttons
+                modalButtons.innerHTML = '';
 
                 const okButton = document.createElement('button');
                 okButton.textContent = isConfirm ? 'Confirm' : 'OK';
@@ -241,33 +431,26 @@
                     modalButtons.appendChild(cancelButton);
                 }
 
-                customModal.style.display = 'flex'; // Show the modal
+                customModal.style.display = 'flex';
             });
         };
 
         // --- Functions ---
-
-        /**
-         * Renders references to the DOM.
-         * @param {Array} references - Array of references to be rendered.
-         */
         const renderReferences = (references) => {
-            referencesList.innerHTML = ''; // Clear the existing list
+            referencesList.innerHTML = '';
 
             if (references.length === 0) {
                 emptyState.classList.remove('hidden');
             } else {
                 emptyState.classList.add('hidden');
                 
-                // Sort references by page number
                 const sortedReferences = [...references].sort((a, b) => a.pageNumber - b.pageNumber);
 
                 sortedReferences.forEach(ref => {
                     const refElement = document.createElement('div');
                     refElement.className = 'bg-custom-light p-5 rounded-xl shadow-sm border border-gray-100 transform hover:scale-[1.02] transition-transform duration-300';
-                    refElement.setAttribute('data-id', ref.id); // Assign Firestore document ID
+                    refElement.setAttribute('data-id', ref.id);
 
-                    // Convert date to a readable format
                     const formattedDate = new Date(ref.createdAt).toLocaleDateString('en-US', {
                         year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'
                     });
@@ -301,38 +484,39 @@
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const addButton = form.querySelector('button[type="submit"]');
-            addButton.disabled = true; // Disable button to prevent double submission
-            addButton.textContent = 'Adding...'; // Change button text
+            addButton.disabled = true;
+            addButton.textContent = 'Adding...';
 
             const newReference = {
                 title: form.title.value.trim(),
                 author: form.author.value.trim(),
                 link: form.link.value.trim(),
                 pageNumber: parseInt(form.pageNumber.value, 10),
-                createdAt: new Date().toISOString() // Save creation date in ISO format
+                createdAt: new Date().toISOString()
             };
 
-            // Basic validation to ensure pageNumber is a number
             if (isNaN(newReference.pageNumber)) {
                 await showMessage("Error: Page number must be a valid number.");
-                addButton.disabled = false; // Re-enable button
-                addButton.textContent = 'Add Reference'; // Reset button text
-                return; // Stop execution if pageNumber is not a number
+                addButton.disabled = false;
+                addButton.textContent = 'Add Reference';
+                return;
             }
 
-            console.log("Attempting to add new reference:", newReference); // Log data before adding
-
             try {
-                // Add new reference to Firestore
-                await addDoc(refsCollectionRef, newReference);
-                form.reset(); // Clear the form
-                await showMessage("Reference added successfully!"); // Confirmation message
+                await storage.addReference(newReference);
+                form.reset();
+                await showMessage("Reference added successfully!");
+                
+                // Refresh the references list if using localStorage
+                if (!useFirebase) {
+                    renderReferences(storage.getReferences());
+                }
             } catch (error) {
-                console.error("Error adding reference: ", error); // Log the full error object
+                console.error("Error adding reference: ", error);
                 await showMessage(`An error occurred, reference could not be added. Details: ${error.message || error}`);
             } finally {
-                addButton.disabled = false; // Re-enable button
-                addButton.textContent = 'Add Reference'; // Reset button text
+                addButton.disabled = false;
+                addButton.textContent = 'Add Reference';
             }
         });
 
@@ -345,8 +529,8 @@
                 const confirmed = await showMessage("Are you sure you want to delete this reference?", true);
                 if (confirmed) {
                     try {
-                        // Delete reference from Firestore
-                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/references`, refId));
+                        // Delete reference using storage interface
+                        await storage.deleteReference(refId);
                     } catch (error) {
                         console.error("Error deleting reference: ", error);
                         await showMessage("An error occurred, reference could not be deleted.");
@@ -357,35 +541,13 @@
 
         // --- Initialization ---
         
-        // Manage user authentication
-        const manageAuth = async () => {
-             try {
-                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-             } catch (error) {
-                 console.error("Authentication error:", error);
-                 await showMessage("Authentication failed. Please try again.");
-             }
-        };
+        // Initialize text editor
+        textEditor.init();
 
-        // Authenticate on page load and listen for data changes
-        document.addEventListener('DOMContentLoaded', async () => {
-            await manageAuth();
-            
-            // Listen for real-time changes in Firestore
-            onSnapshot(refsCollectionRef, (snapshot) => {
-                const references = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderReferences(references);
-            }, async (error) => {
-                console.error("Error fetching data:", error);
-                await showMessage("An error occurred while fetching references.");
-            });
+        // Listen for changes in references
+        storage.onReferencesChange((references) => {
+            renderReferences(references);
         });
-
     </script>
 </body>
 </html>
